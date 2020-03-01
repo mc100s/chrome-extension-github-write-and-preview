@@ -1,3 +1,5 @@
+"use strict";
+
 /*
 TODO:
 - Add a button "Write & Preview"
@@ -79,15 +81,58 @@ window.onload = () => {
   $textarea.style.minHeight = "100%";
   $textarea.style.overflow = "auto";
 
-  function updateNewPreview() {
-    markdownToGithubHtml($textarea.value).then(result => {
-      $newPreview.innerHTML = result;
-    });
+  let globalIntervalId;
+  let canFastUpdate = false;
+  let previousTextLength = $textarea.value.length;
+  function updateNewPreview(e) {
+    const letterTyped = e?.data;
+    const { selectionStart } = $textarea;
+    const currentTextLength = $textarea.value.length;
+    canFastUpdate =
+      canFastUpdate &&
+      currentTextLength === previousTextLength + 1 &&
+      letterTyped &&
+      letterTyped.length === 1;
+    previousTextLength = currentTextLength;
+    if (canFastUpdate) {
+      const previousTextTyped = $textarea.value
+        .substr(0, selectionStart - 1)
+        .match(/[a-z][- '"a-z0-9\.\?\!\,]*$/i)?.[0];
+      const matches = [
+        ...$newPreview.innerHTML.matchAll(
+          new RegExp(previousTextTyped?.trim(), "g")
+        )
+      ];
+      if (previousTextTyped && matches.length === 1) {
+        const length = matches[0].index + previousTextTyped.trim().length;
+        $newPreview.innerHTML =
+          $newPreview.innerHTML.substr(0, length) +
+          " ".repeat(
+            previousTextTyped.length - previousTextTyped.trim().length
+          ) +
+          letterTyped +
+          $newPreview.innerHTML.substr(length);
+      } else {
+        canFastUpdate = false;
+      }
+    }
+    const localIntervalId = setTimeout(() => {
+      if (globalIntervalId === localIntervalId) {
+        markdownToGithubHtml($textarea.value).then(result => {
+          $newPreview.innerHTML = result;
+          canFastUpdate = true;
+          showDebug({ canFastUpdate });
+        });
+      }
+    }, 2000);
+    globalIntervalId = localIntervalId;
+
+    showDebug({ canFastUpdate });
   }
   setTimeout(() => {
     updateNewPreview();
   }, 0);
-  $textarea.addEventListener("keyup", updateNewPreview);
+  $textarea.addEventListener("input", updateNewPreview);
 
   let height = "20vh";
   function updateStyleHeightMainBlock() {
@@ -101,6 +146,43 @@ window.onload = () => {
       updateStyleHeightMainBlock();
     }
   });
-
-  console.log("Hello world!");
 };
+
+function showDebug(variables) {
+  let $debug = document.querySelector("#debug");
+  setLocalValue("variables", variables);
+  if (!$debug) {
+    $debug = document.createElement("div");
+    $debug.setAttribute("id", "debug");
+    $debug.style.position = "fixed";
+    $debug.style.top = 0;
+    $debug.style.right = 0;
+    $debug.style.padding = "5px 8px";
+    $debug.style.zIndex = 1000;
+    $debug.style.backgroundColor = "#ff0000a0";
+    $debug.style.color = "#ffffff";
+    $debug.style.cursor = "pointer";
+    $debug.addEventListener("click", () => {
+      setLocalValue("isDebugExpanded", !getLocalValue("isDebugExpanded"));
+      showDebug(getLocalValue("variables"));
+    });
+    document.body.append($debug);
+  }
+
+  if (!getLocalValue("isDebugExpanded")) {
+    $debug.innerHTML = "+";
+  } else {
+    $debug.innerHTML = "";
+    for (const variableName in variables) {
+      const jsonStr = JSON.stringify(variables[variableName], null, 2);
+      $debug.innerHTML += `${variableName} = ${jsonStr}\n`;
+    }
+  }
+}
+
+function getLocalValue(key) {
+  return JSON.parse(localStorage.getItem(key));
+}
+function setLocalValue(key, value) {
+  return localStorage.setItem(key, JSON.stringify(value));
+}
