@@ -8,6 +8,7 @@ TODO:
 - Add some latency when user type and don't send too many requests (maybe only after 500ms of inactivity)
 - Don't update the text if something older come
 - Scroll on the same part that is typed. For example when the user adds a new line, it should scroll down too
+- Try another strategy for the fast update: try to add a cursor object and apply the changes from the cursor
 */
 
 function markdownToGithubHtml(markdownText) {
@@ -85,37 +86,60 @@ window.onload = () => {
   let canFastUpdate = false;
   let previousTextLength = $textarea.value.length;
   function updateNewPreview(e) {
-    const letterTyped = e?.data;
-    const { selectionStart } = $textarea;
     const currentTextLength = $textarea.value.length;
-    canFastUpdate =
-      canFastUpdate &&
-      currentTextLength === previousTextLength + 1 &&
-      letterTyped &&
-      letterTyped.length === 1;
-    previousTextLength = currentTextLength;
-    if (canFastUpdate) {
-      const previousTextTyped = $textarea.value
-        .substr(0, selectionStart - 1)
-        .match(/[a-z][- '"a-z0-9\.\?\!\,]*$/i)?.[0];
-      const matches = [
-        ...$newPreview.innerHTML.matchAll(
-          new RegExp(previousTextTyped?.trim(), "g")
-        )
-      ];
-      if (previousTextTyped && matches.length === 1) {
-        const length = matches[0].index + previousTextTyped.trim().length;
-        $newPreview.innerHTML =
-          $newPreview.innerHTML.substr(0, length) +
-          " ".repeat(
-            previousTextTyped.length - previousTextTyped.trim().length
-          ) +
-          letterTyped +
-          $newPreview.innerHTML.substr(length);
-      } else {
-        canFastUpdate = false;
+    const { selectionStart } = $textarea;
+    if (e?.inputType === "deleteContentBackward") {
+      canFastUpdate =
+        canFastUpdate && currentTextLength === previousTextLength - 1; // Diff
+      previousTextLength = currentTextLength;
+      if (canFastUpdate) {
+        const previousTextTyped = $textarea.value
+          .substr(0, selectionStart)
+          .match(/[a-z][- '"a-z0-9\.\?\!\,]*$/i)?.[0];
+        const matches = [
+          ...$newPreview.innerHTML.matchAll(new RegExp(previousTextTyped, "g"))
+        ];
+        if (previousTextTyped && matches.length === 1) {
+          const length = matches[0].index + previousTextTyped.length;
+          $newPreview.innerHTML =
+            $newPreview.innerHTML.substr(0, length) +
+            $newPreview.innerHTML.substr(length + 1);
+        } else {
+          canFastUpdate = false;
+        }
+      }
+    } else if (e?.inputType === "insertText") {
+      const letterTyped = e?.data;
+      canFastUpdate =
+        canFastUpdate &&
+        currentTextLength === previousTextLength + 1 &&
+        letterTyped &&
+        letterTyped.length === 1;
+      previousTextLength = currentTextLength;
+      if (canFastUpdate) {
+        const previousTextTyped = $textarea.value
+          .substr(0, selectionStart - 1)
+          .match(/[a-z][- '"a-z0-9\.\?\!\,]*$/i)?.[0];
+        const matches = [
+          ...$newPreview.innerHTML.matchAll(
+            new RegExp(previousTextTyped?.trim(), "g")
+          )
+        ];
+        if (previousTextTyped && matches.length === 1) {
+          const length = matches[0].index + previousTextTyped.trim().length;
+          $newPreview.innerHTML =
+            $newPreview.innerHTML.substr(0, length) +
+            " ".repeat(
+              previousTextTyped.length - previousTextTyped.trim().length
+            ) +
+            letterTyped +
+            $newPreview.innerHTML.substr(length);
+        } else {
+          canFastUpdate = false;
+        }
       }
     }
+
     const localIntervalId = setTimeout(() => {
       if (globalIntervalId === localIntervalId) {
         markdownToGithubHtml($textarea.value).then(result => {
