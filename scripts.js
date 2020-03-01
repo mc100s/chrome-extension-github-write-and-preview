@@ -3,6 +3,7 @@
 /*
 TODO:
 - Add a button "Write & Preview"
+- Stop the resize of the textarea
 - Try to put the actions buttons (eg: "Comment") next to the formatting buttons
 - Make it work for new issues (eg: https://github.com/alan-eu/Topics/issues/new)
 - Add some latency when user type and don't send too many requests (maybe only after 500ms of inactivity)
@@ -33,6 +34,7 @@ function markdownToGithubHtml(markdownText) {
 }
 
 window.onload = () => {
+  setGlobalCss();
   const $empty = document.createElement("div");
 
   const $mainBlock = document.querySelector(
@@ -171,6 +173,20 @@ window.onload = () => {
     }
   });
 };
+
+function setGlobalCss() {
+  let css = `
+    .upload-enabled.focused {
+      box-shadow: none !important;
+    }
+  `;
+
+  let styleTag = document.createElement("style");
+  if (styleTag.styleSheet) styleTag.styleSheet.cssText = css;
+  else styleTag.appendChild(document.createTextNode(css));
+
+  document.getElementsByTagName("head")[0].appendChild(styleTag);
+}
 
 function showDebug(variables) {
   let $debug = document.querySelector("#debug");
